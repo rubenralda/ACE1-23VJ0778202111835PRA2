@@ -29,7 +29,7 @@ mensaje_menu_herra db "-----------Menu Herramientas------------", 0A
     db  "(S)reporte de productos sin existencias", 0A
     db  "(R)egresar", 0a, "$"
 ;;
-mensaje_menu_ventas db "-----------Ventas------------", 0A, "$"
+mensaje_menu_ventas db "-----------Ventas------------", "$"
 ;;
 saltos db 0a, 0a, "$"
 credenciales db '[credenciales]usuario="rmejia"clave="202111835"', "$"
@@ -37,9 +37,11 @@ mensaje_correcto db "Credenciales correctas, presiona ENTER", 0a, "$"
 ;;
 nombre_credenciales db "PRAII.CON", 00
 handle_crede dw 0000
-error db "El archivo no existe", 0a, "$"
-mensaje_salida db "Ejecucion terminada", "$"
+error db 0A,"El archivo no existe", "$"
+no_existe db 0A,"El producto no fue encontrado", "$"
+mensaje_salida db 0a,"Ejecucion terminada", "$"
 mensaje_borrado db "Producto eliminado", "$"
+nueva_lin db 0A, "$"
 ;;
 prompt     db    "Elija una opcion:",0a,"$"
 prompt_code      db    0a, "Codigo: ","$"
@@ -55,6 +57,11 @@ cod_units   dw    0000
 num_price   db    02 dup (0)
 num_units   db    02 dup (0)
 ceros       db    28 dup (0)
+;; "ESTRUCTURA PRODUCTO temporal"
+cod_prod_temp    db    04 dup (0)
+cod_desc_temp    db    20 dup (0)
+cod_price_temp   dw    0000
+cod_units_temp   dw    0000
 ;;
 nombre_archivo_productos db "PROD.BIN", 00
 handle_prods dw 0000
@@ -63,9 +70,17 @@ codigo_buscado    db    04 dup (0)
 puntero_temp     dw    0000
 ;;
 caracter_leido    db   00, "$"
-buffer_entrada   db  20, 00
-    db  20 dup (0)
+buffer_entrada   db  25, 00
+    db  25 dup (0)
 numero db   05 dup (30)
+;;
+buffer_codigo db 05, 00
+    db 05 dup (0)
+buffer_unidad db 04, 00
+    db 04 dup (0)
+mostrar_contador db 0A, 00, "$"
+contador_diez db 01
+
 .CODE ; segemento de codigo
 .STARTUP
     mov DX, offset encabezado
@@ -132,6 +147,9 @@ esperando_enter:
 
 ; ---------------------------Menus-----------------------------------------
 menu_principal:
+    mov DX, offset saltos
+    mov AH, 09
+    int 21 ; imprimir saltos
     mov DX, offset mensaje_menu_principal
     mov AH, 09
     int 21 ; imprimir menu
@@ -147,6 +165,7 @@ menu_principal:
     cmp AL, 73 ; s minúscula ascii
     je fin
     jmp menu_principal
+
 menu_productos:
     mov DX, offset saltos
     mov AH, 09
@@ -174,7 +193,10 @@ menu_ventas:
     mov DX, offset mensaje_menu_ventas
     mov AH, 09
     int 21 ; imprimir menu
-    jmp fin
+    ; mov CX, 000A
+    mov [contador_diez], 01
+    jmp ventas
+
 menu_herramientas:
     mov DX, offset saltos
     mov AH, 09
@@ -206,6 +228,7 @@ pedir_codigo:
     inc DI
     mov AL, [DI]
     mov AL, 00
+    mov [DI], AL
     inc DI
     call memset
     ;
@@ -250,6 +273,7 @@ pedir_descripcion:
     inc DI
     mov AL, [DI]
     mov AL, 00
+    mov [DI], AL
     inc DI
     call memset
     ;
@@ -294,6 +318,7 @@ pedir_precio:
     inc DI
     mov AL, [DI]
     mov AL, 00
+    mov [DI], AL
     inc DI
     call memset
     ;
@@ -309,7 +334,7 @@ pedir_precio:
     mov AL, [DI]
     cmp AL, 00
     je  pedir_precio
-    cmp AL, 03 ; tamaño máximo del campo
+    cmp AL, 06 ; menor a 5 digitos para representar 2 byte
     jb  aceptar_tam_precio ; jb --> jump if below
     jmp pedir_precio
     ; mover al campo precio en la estructura producto
@@ -317,9 +342,13 @@ pedir_precio:
 aceptar_tam_precio:
     mov DI, offset buffer_entrada
     inc DI
+    mov CH, 00
+    mov CL, [DI] 
     inc DI
     call cadenaAnum
     ;; AX -> numero convertido
+    ; cmp AX, ffff
+    ; jg pedir_precio
     mov [cod_price], AX
     
 pedir_unidades:
@@ -330,6 +359,7 @@ pedir_unidades:
     inc DI
     mov AL, [DI]
     mov AL, 00
+    mov [DI], AL
     inc DI
     call memset
     ;
@@ -345,16 +375,20 @@ pedir_unidades:
     mov AL, [DI]
     cmp AL, 00
     je pedir_unidades
-    cmp AL, 03  ; tamaño máximo del campo
+    cmp AL, 06  ; menor a 5 digitos para representar 2 byte
     jb aceptar_tam_unidades ; jb --> jump if below
     jmp pedir_unidades
     ; mover al campo codigo en la estructura producto
 aceptar_tam_unidades:
     mov DI, offset buffer_entrada
     inc DI
+    mov CH, 00
+    mov CL, [DI] 
     inc DI
     call cadenaAnum
     ;; AX -> numero convertido
+    ; cmp AX, ffff
+    ; jg pedir_unidades
     mov [cod_units], AX
     ;
 ;--------------------------Guardar producto-----------------------------------
@@ -376,23 +410,43 @@ crear_archivo_prod:
 guardar_handle_prod:
     ; guardamos handle
     mov [handle_prods], AX
-    ; obtener handle
-    mov BX, [handle_prods]
-    ; vamos al final del archivo
-    mov CX, 00
-    mov DX, 00
-    mov AL, 02
-    mov AH, 42
-    int 21
-    ; escribir el producto en el archivo
+    mov DX, 0000
+	mov [puntero_temp], DX
+
+ciclo_espacio_disponible:
+	mov BX, [handle_prods]
+	mov CX, 0028
+	mov DX, offset cod_prod_temp
+	moV AH, 3f
+	int 21
+    cmp AX, 0000 ; si lee 0 bytes se ingresa al final
+	je espacio_a_ingresar
+	mov AL, 00 ; verificar si es el codigo es 00
+	cmp [cod_prod_temp], AL
+	je espacio_a_ingresar
+    mov DX, [puntero_temp]
+	add DX, 0028
+	mov [puntero_temp], DX
+	jmp ciclo_espacio_disponible
+
+espacio_a_ingresar:
+    mov DX, [puntero_temp]
+	mov CX, 0000
+	mov BX, [handle_prods]
+	mov AL, 00
+	mov AH, 42
+	int 21
+	; puntero posicionado, escribir el producto en el archivo
     mov CX, 0028
     mov DX, offset cod_prod
     mov AH, 40
     int 21
     ; cerrar archivo
+    mov BX, [handle_prods]
     mov AH, 3e
     int 21
     ;
+    call limpiar_estructura
     jmp menu_productos
 ;-------------------------eliminar producto-----------------------------------
 eliminar_producto:
@@ -435,8 +489,8 @@ copiar_codigo_encontrado:
     mov DX, offset nombre_archivo_productos
     mov AH, 3d
     int 21
+    jc error_crear_antes_archivo
     mov [handle_prods], AX
-    ; TODO: revisar si existe
 
 ciclo_encontrar:
 	mov BX, [handle_prods]
@@ -446,7 +500,7 @@ ciclo_encontrar:
 	int 21
     int 3
     cmp AX, 0000 ; se acaba cuando el archivo se termina
-	je finalizar_borrar
+	je no_encontrado_eliminar
 	mov DX, [puntero_temp]
 	add DX, 0028
 	mov [puntero_temp], DX
@@ -480,19 +534,133 @@ borrar_encontrado:
     mov DX, offset mensaje_borrado
     mov AH, 09
     int 21 ; imprimir Producto eliminado
+    jmp finalizar_borrar
 
+no_encontrado_eliminar:
+    mov DX, offset no_existe
+    mov AH, 09
+    int 21 ; imprimir el producto no fue encontrado
 finalizar_borrar:
     mov BX, [handle_prods]
     mov AH, 3e
     int 21
+    call limpiar_estructura
+    jmp menu_productos
+
+error_crear_antes_archivo:
+    mov DX, offset error
+    mov AH, 09
+    int 21 ; imprimir el archivo no existe
     jmp menu_productos
 
 ;-------------------------mostrar producto------------------------------------
 mostrar_productos:
+    mov DX, offset nueva_lin
+    mov AH, 09
+    int 21
+    ;
+    mov AL, 02
+    mov AH, 3d
+    mov DX, offset nombre_archivo_productos
+    int 21 ;; leemos
+    mov [handle_prods], AX
     
-    jmp fin
+ciclo_mostrar:
+		; puntero cierta posición
+		mov BX, [handle_prods]
+		mov CX, 0028 ; leer 28h bytes
+		mov DX, offset cod_prod
+		mov AH, 3f
+		int 21
+		;; ¿cuántos bytes leímos?
+		;; si se leyeron 0 bytes entonces se terminó el archivo...
+		cmp AX, 0000
+		je fin_mostrar
+		;; ver si es producto válido
+		mov AL, 00
+		cmp [cod_prod], AL
+		je ciclo_mostrar
+		;; producto en estructura
+		call imprimir_estructura
+		jmp ciclo_mostrar
+		
+fin_mostrar:
+        call limpiar_estructura
+		jmp menu_productos
 ; ----------------------Ventas----------------------------------------------
+ventas:
+    mov BL, [contador_diez]
+    add BL, 30 ; le sumo 30 para obtener el caracter correspiente al numero
+    mov DI, offset mostrar_contador
+    inc DI ; me muevo al caracter a mostrar
+    mov [DI], BL
+    mov DX, offset mostrar_contador
+	mov AH, 09
+	int 21 ; imprimo la iteracion
 
+pedir_codigo1:
+    ; limpiar buffer
+    mov DI, offset buffer_codigo
+    mov CH, 00
+    mov CL, [DI]
+    inc DI
+    mov AL, [DI]
+    mov AL, 00
+    inc DI
+    call memset
+    ;
+    mov DX, offset prompt_code
+    mov AH, 09
+    int 21 ; imprimir codigo:
+    mov DX, offset buffer_codigo
+    mov AH, 0a
+    int 21
+    ; verificar que el tamaño del codigo no sea mayor a 4 y menor a 0
+    mov DI, offset buffer_codigo
+    inc DI
+    mov AL, [DI]
+    cmp AL, 00
+    je  pedir_codigo1
+    cmp AL, 05
+    jb pedir_unidades1  ; jb --> jump if below
+    jmp pedir_codigo1
+
+pedir_unidades1:
+    ; limpiar buffer
+    mov DI, offset buffer_unidad
+    mov CH, 00
+    mov CL, [DI]
+    inc DI
+    mov AL, [DI]
+    mov AL, 00
+    inc DI
+    call memset
+    ;
+    mov DX, offset prompt_units
+    mov AH, 09
+    int 21 ; imprimir "unidades:"
+    mov DX, offset buffer_unidad
+    mov AH, 0a
+    int 21
+    ; verificar que el tamaño de byte no sea mayor a 3
+    mov DI, offset buffer_unidad
+    inc DI
+    mov AL, [DI]
+    cmp AL, 00
+    je pedir_unidades1
+    cmp AL, 04  ; tamaño máximo del campo
+    jb sumar_contador ; jb --> jump if below
+    jmp pedir_unidades1
+
+sumar_contador: ; buffer_unidad y cod_unidad llenos
+    
+    cmp contador_diez, 02
+    jge confirmar_venta
+    inc contador_diez 
+    jmp ventas
+
+confirmar_venta:
+    jmp menu_principal
 ; ----------------------Menu herramientas------------------------------------
 catalogo_completo:
 productos_alfabeticos:
@@ -500,32 +668,59 @@ reporte_ventas:
 productos_sin_existencia:
     jmp fin
 ; -----------------------------------------------------------------------------
+;; imprimir_estructura - ...
+;; ENTRADAS:
+;; SALIDAS:
+;;     o Impresión de estructura
 imprimir_estructura:
-	mov DI, offset caracter_leido
+        mov DX, offset prompt_code
+		mov AH, 09
+		int 21
+		mov DI, offset cod_prod
 ciclo_poner_dolar_1:
-    mov AL, [DI]
-    cmp AL, 00
-    int 3
-    je poner_dolar_1
-    inc DI
-    jmp ciclo_poner_dolar_1
+		mov AL, [DI]
+		cmp AL, 00
+		je poner_dolar_1
+		inc DI
+		jmp ciclo_poner_dolar_1
 poner_dolar_1:
-    mov AL, 24  ;; dólar
-    mov [DI], AL
-    ;; imprimir normal
-    mov DX, offset caracter_leido
-    mov AH, 09
-    int 21
-    ret
+		mov AL, 24 ; dólar
+		mov [DI], AL
+		; imprimir normal
+		mov DX, offset cod_prod
+		mov AH, 09
+		int 21
+        ; inicio imprimir descripcion
+        mov DX, offset prompt_desc
+		mov AH, 09
+		int 21
+        mov DI, offset cod_desc
+ciclo_poner_dolar:
+		mov AL, [DI]
+		cmp AL, 00
+		je poner_dolar
+		inc DI
+		jmp ciclo_poner_dolar
+poner_dolar:
+		mov AL, 24 ; dólar
+		mov [DI], AL
+        mov DX, offset cod_desc
+		mov AH, 09
+		int 21
+        mov DX, offset nueva_lin
+		mov AH, 09
+		int 21
+		ret
 
 ;; cadenaAnum
 ;; ENTRADA:
 ;;    DI -> dirección a una cadena numérica
+;;    CX -> cantidad de digitos o bytes
 ;; SALIDA:
 ;;    AX -> número convertido
 cadenaAnum:
 		mov AX, 0000    ; inicializar la salida
-		mov CX, 0002    ; inicializar contador
+		; mov CX, 0005    ; inicializar contador
 		;;
 seguir_convirtiendo:
 		mov BL, [DI]
@@ -595,6 +790,12 @@ memset:
     mov [DI], AL
     inc DI
     loop memset
+    ret
+;;
+limpiar_estructura:
+    mov DI, offset cod_prod
+    mov CX, 0028
+    call memset
     ret
 
 ;; cadenas_iguales -
