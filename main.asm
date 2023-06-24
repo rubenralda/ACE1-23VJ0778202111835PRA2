@@ -73,13 +73,25 @@ caracter_leido    db   00, "$"
 buffer_entrada   db  25, 00
     db  25 dup (0)
 numero db   05 dup (30)
-;;
+;; Ventas
+cancelar_venta db "fin"
 buffer_codigo db 05, 00
     db 05 dup (0)
 buffer_unidad db 04, 00
     db 04 dup (0)
 mostrar_contador db 0A, 00, "$"
 contador_diez db 01
+monto_venta dw 0000
+nombre_archivo_ventas db "VENT.BIN", 00
+handle_ventas dw 0000
+; Estructura 10 item Venta
+dia db 00
+mes db 00
+anio db 00
+hora db 00
+min db 00
+unidades_temp db 00
+registro_venta db 0A dup (0)
 
 .CODE ; segemento de codigo
 .STARTUP
@@ -195,6 +207,8 @@ menu_ventas:
     int 21 ; imprimir menu
     ; mov CX, 000A
     mov [contador_diez], 01
+    mov DX, 0000
+	mov [puntero_temp], DX
     jmp ventas
 
 menu_herramientas:
@@ -615,15 +629,26 @@ pedir_codigo1:
     mov DX, offset buffer_codigo
     mov AH, 0a
     int 21
-    ; verificar que el tamaño del codigo no sea mayor a 4 y menor a 0
+    ;
     mov DI, offset buffer_codigo
     inc DI
     mov AL, [DI]
     cmp AL, 00
-    je  pedir_codigo1
+    je pedir_codigo1 ; verificar que el tamaño del codigo no sea menor a 0
     cmp AL, 05
-    jb pedir_unidades1  ; jb --> jump if below
+    jb comprobar_fin  ; verificar que el tamaño del codigo no sea mayor a 4
     jmp pedir_codigo1
+
+comprobar_fin:
+    ; verificar el código
+	mov SI, offset cancelar_venta
+    inc DI
+	; mov DI, offset cancelar_venta
+	mov CX, 0003
+	call cadenas_iguales
+	;;;; << DL == 0ff si son iguales
+	cmp DL, 0ff
+	je confirmar_venta 
 
 pedir_unidades1:
     ; limpiar buffer
@@ -652,8 +677,76 @@ pedir_unidades1:
     jb sumar_contador ; jb --> jump if below
     jmp pedir_unidades1
 
-sumar_contador: ; buffer_unidad y cod_unidad llenos
-    
+sumar_contador: ; buffer_unidad y buffer_codigo llenos
+    ; aqui comprobar las unidades y codigo para modificar el archivo productos
+    ; obtengo la hora
+    mov AH, 2C
+    int 21
+    mov [hora], CH
+    mov [min], CL
+    ; obtengo la fecha
+    mov AH, 2A
+    int 21
+    mov [dia], DL
+    mov [mes], DH
+    mov [anio], CL
+abrir_archivo_ventas: ; probar abrirlo normal
+    mov AL, 02
+    mov AH, 3d
+    mov DX, offset nombre_archivo_ventas
+    int 21
+    ; si no lo cremos
+    jc crear_archivo_ventas
+    ; si abre escribimos
+    jmp guardar_handle_ventas
+crear_archivo_ventas:
+    mov CX, 0000
+    mov DX, offset nombre_archivo_ventas
+    mov AH, 3c
+    int 21
+    ; archivo abierto
+guardar_handle_ventas:
+    ; guardamos handle
+    int 3
+    mov [handle_ventas], AX
+    mov DX, 0000
+	mov CX, 0000
+	mov BX, [handle_ventas]
+	mov AL, 02
+	mov AH, 42
+	int 21
+	; puntero posicionado, escribir la venta
+    mov CX, 0005
+    mov DX, offset dia
+    mov AH, 40
+    int 21
+    ;escribir codigo
+    mov CX, 0004
+    mov DX, offset buffer_codigo
+    inc DX
+    inc DX
+    mov AH, 40
+    int 21
+    ; convertir unidades a numero
+    mov DI, offset buffer_unidad
+    inc DI
+    inc DI
+    mov CX, 0003
+    call cadenaAnum
+    ; AX -> cadena convertida
+    mov [unidades_temp], AL
+    ; escribir unidades
+    mov CX, 0001
+    mov DX, offset unidades_temp
+    mov AH, 40
+    int 21
+    ; cerrar archivo
+    mov BX, [handle_ventas]
+    mov AH, 3e
+    int 21
+    ;
+    call limpiar_estructura_ventas
+    ; incrementar el contador hasta el numero a comparar
     cmp contador_diez, 02
     jge confirmar_venta
     inc contador_diez 
@@ -797,7 +890,11 @@ limpiar_estructura:
     mov CX, 0028
     call memset
     ret
-
+limpiar_estructura_ventas:
+    mov DI, offset dia
+    mov CX, 0006
+    call memset
+    ret
 ;; cadenas_iguales -
 ;; ENTRADA:
 ;;    SI -> dirección a cadena 1
