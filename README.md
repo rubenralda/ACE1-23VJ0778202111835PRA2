@@ -379,46 +379,46 @@ comprobar_caracter_descripcion:
 ## Inicio de sesión
 Tendremos que iniciar sesión con las credenciales previamente cargadas en el archivo **PRAII.CON**. Si el archivo no esta o son incorrectas, se procedera a salir de la aplicación, caso contrario se espera que presiona la tecla ENTER.
 
-![Login](img\image.png)
+![Login](img/image.png)
 
 ## Menú Principal
 Tendremos en pantalla las opciones posibles a escoger, presionando la tecla con el caracter correspodiente a lo que esta dentro de los parentesís y si se presiona cualquier otra cargará el menú nuevamente.
 
-![menu principal](img\image-1.png)
+![menu principal](img/image-1.png)
 ## Menú productos
 En este menú se podrá escoger con la misma dinamica que el menú anterior, las opciones ahí listadas.
 
-![Alt text](img\image-2.png)
+![Alt text](img/image-2.png)
 
 ### Ingreso de producto
 
 Para el ingreso de productos, se pide un código, luego una descripción, el precio y las unidades de este, cuando se termine de ingresar los datos regresará al menú productos. Los productos se guardarán en en el archivo **PROD.BIN**, si no existe se crea.
 
-![Alt text](img\image-3.png)
+![Alt text](img/image-3.png)
 
 ### Eliminar un producto
 Para borrar un producto de solo es necesario ingresar el código de este y se mostrará el mensaje que fue eliminado.
 
-![Alt text](img\image-4.png)
+![Alt text](img/image-4.png)
 
 ### Visualizar los productos
 Esta opción muestra en pantalla en grupos de 5, los productos ingresados. Se muestra el código y la descripción y para ver la siguiente página se presiona la tecla ENTER o para finalizar la tecla q.
 
-![Alt text](img\image-5.png)
+![Alt text](img/image-5.png)
 
 ## Ventas
 Si se tienen productos ingresados, es posible perder varias unidades. La venta se hace por 10 productos y se va calculando en pantalla el monto total, se pide el código y las unidades a vender. Para salir prematuramente se debe escribir la palabra fin.
 
-![Alt text](img\image-6.png)
+![Alt text](img/image-6.png)
 
 Independiente de llenar los 10 items o terminar antes, se nos pedirá confirmar la venta. De confirmar se actualizarán las existencias en el archivo productos.
-![Alt text](img\image-7.png)
+![Alt text](img/image-7.png)
 
 ## Herramientas
 
 En esta opción se nos desplegará un menú de los reportes que se pueden hacer. De igual forma para escoger una opción se hace como en las menus anteriores.
 
-![Alt text](img\image-8.png)
+![Alt text](img/image-8.png)
 
 Después de escoger un reporte, se mostrá un mensaje indicando que ha terminado.
 
@@ -427,17 +427,17 @@ En todos tendremos la fecha en la parte superior.
 
 En el reporte de catalogo, se lista en una tabla los productos ingresados:
 
-![Alt text](img\image-9.png)
+![Alt text](img/image-9.png)
 
 En el reporte alfabetico, se hace un conteo por la inicial de cada descripción de los productos.
 
-![Alt text](img\image-10.png)
+![Alt text](img/image-10.png)
 
 En el reporte de productos sin existencias, de igual forma se hace un listado con la peculiariad de los productos que tiene 0 unidades.
 
-![Alt text](img\image-11.png)
+![Alt text](img/image-11.png)
 
 Y por último, esta el reporte de ventas. Esta divido en 3 partes, en la primera se lista las ultimas 5 ventas, en la segunda la venta de mayor monto y la tercera la venta de menor monto.
 
-![Alt text](img\image-12.png)
-![Alt text](img\image-13.png)
+![Alt text](img/image-12.png)
+![Alt text](img/image-13.png)
